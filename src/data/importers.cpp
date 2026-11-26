@@ -484,4 +484,29 @@ FuturesBulletin read_egx_futures_bulletin_html(const std::filesystem::path& path
     return out;
 }
 
+std::optional<Date> repeats_previous_day(const std::vector<FuturesSettlement>& existing,
+                                         const std::vector<FuturesSettlement>& day) {
+    if (day.empty()) return std::nullopt;
+    const auto this_day = std::chrono::sys_days{day.front().date};
+
+    // Latest date in `existing` strictly before this day.
+    std::optional<std::chrono::sys_days> prev;
+    for (const auto& f : existing) {
+        const auto d = std::chrono::sys_days{f.date};
+        if (d < this_day && (!prev || d > *prev)) prev = d;
+    }
+    if (!prev) return std::nullopt;
+
+    std::map<std::string, const FuturesSettlement*> prev_rows;
+    for (const auto& f : existing)
+        if (std::chrono::sys_days{f.date} == *prev) prev_rows[f.contract] = &f;
+    if (prev_rows.size() != day.size()) return std::nullopt;
+    for (const auto& f : day) {
+        const auto it = prev_rows.find(f.contract);
+        if (it == prev_rows.end() || it->second->settle != f.settle || it->second->volume != f.volume)
+            return std::nullopt;
+    }
+    return Date{*prev};
+}
+
 }  // namespace egxq

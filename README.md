@@ -110,6 +110,28 @@ For real data, Investing.com exports and the T-bill auction workbook are importe
 
 Other real files go in the same folder under the standard file names, then run `egx_db load` on it. In code, `MarketDb` gives point-in-time lookups (`index_close_on_or_before`, `fx_on_or_before`, `tbill_for_horizon`, `futures_on`) and date ranges.
 
+## Daily data collection (Windows)
+
+EGX and Investing.com block automated downloads with bot protection, so saving the pages stays a manual click in your own browser. Everything after that is automated by the scripts in [tools/](tools/):
+
+| Script | What it does |
+|---|---|
+| `open-bulletin.ps1` | Opens the EGX futures page (Sun–Thu); on Thursdays also the Investing.com EGX30 and USD/EGP history pages |
+| `collect.ps1` | Finds new bulletins, EGX30/USD-EGP exports and T-bill workbooks in Downloads, then files, dates, imports and loads them and runs `egx_basis` |
+| `install-tasks.ps1` | Registers both as Task Scheduler tasks in `\egx-quant\` (`-Remove` to undo) |
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\install-tasks.ps1
+```
+
+**Your part each trading day:** when the page opens at 14:45 (after the 14:30 close), press **Ctrl+S**. On Thursdays, also click Download on the two Investing.com pages. Within 30 minutes `collect.ps1` imports everything.
+
+**What the collector does to stay safe:**
+- **Bulletin dates:** taken from the time you saved the page. A page saved during the session (10:00–14:30) is skipped, because those prices aren't settlements yet.
+- **Holidays:** a bulletin identical to the previous trading day's is rejected, since on a holiday the page keeps showing the last trading day.
+- **Each file once:** files are recorded by hash in `data/raw/ingested.tsv` and never processed twice. Your Downloads folder is left untouched.
+- **Logging:** everything goes to `data/logs/collect-YYYY-MM.log`, including a note when the EGX30 close is behind the futures and needs refreshing.
+
 ## Basis history
 
 `egx_basis` compares every futures settlement in the database with its fair value on that day:
@@ -145,6 +167,7 @@ include/egxquant/
               xlsx.hpp, html_table.hpp, basis_history.hpp, synthetic.hpp
 src/          implementations (egxquant: pricing core; egxquant_data: data pipeline + SQLite)
 apps/         egx_pricer, egx_synth, egx_db, egx_basis CLIs
+tools/        Windows scripts for daily data collection (Task Scheduler)
 tests/        GoogleTest suite (reference values computed independently), fixtures/
 data/         raw and cleaned market data (not committed)
 ```

@@ -72,8 +72,9 @@ egx_db load data/egx.db data/clean
 - Works with the Arabic or English page; columns are found by header name.
 - Only EGX30 index futures are imported. Single-stock futures are counted and ignored.
 - Each contract's code and expiry come from its name, using the EGX specifications (`futures/contract_spec.hpp`).
-- The page does not show its own date, so you give the trading date.
+- The page does not show its own date, so you give the trading date. A bulletin identical to the previous trading day's is refused as a likely holiday copy (`--allow-repeat` overrides).
 - **Open interest is not published there, so it is stored as 0.**
+- **Automation:** `tools/collect.ps1` runs this import for you (see the main README).
 - **Checks:** each settlement must be within the 10% daily limit of the previous settlement, and value ÷ volume must be close to the settlement. This catches misplaced decimal points; the page sometimes *displays* `53747000` for 53,747.000, although the saved HTML has had the decimal point.
 
 The contract specifications PDF is kept in `data/raw/egx/` for reference.

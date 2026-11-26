@@ -22,7 +22,7 @@ constexpr const char* kUsage = R"(Usage:
   egx_db import-tbills <auctions.xlsx> <csv-dir>
                                       Merge a T-bill auction workbook (one sheet per
                                       tenor) into <csv-dir>/tbills.csv
-  egx_db import-futures <bulletin.html> <date> <csv-dir>
+  egx_db import-futures <bulletin.html> <date> <csv-dir> [--allow-repeat]
                                       Merge EGX30 settlements from a saved EGX
                                       Derivatives Market Watch page for trading day
                                       <date> into <csv-dir>/futures.csv
@@ -57,13 +57,20 @@ void report_merge(const std::string& what, const std::vector<egxq::DatedPrice>& 
               << "Wrote " << out.string() << "\n";
 }
 
-int cmd_import_futures(const std::string& html_path, const std::string& date_str, const std::string& dir) {
+int cmd_import_futures(const std::string& html_path, const std::string& date_str, const std::string& dir,
+                       bool allow_repeat) {
     namespace fs = std::filesystem;
     const egxq::Date date = egxq::parse_date(date_str);
     const auto bulletin = egxq::read_egx_futures_bulletin_html(html_path, date);
     fs::create_directories(dir);
     const fs::path out = fs::path(dir) / egxq::files::kFutures;
     const auto existing = fs::exists(out) ? egxq::read_futures_csv(out) : std::vector<egxq::FuturesSettlement>{};
+    if (!allow_repeat) {
+        if (const auto prev = egxq::repeats_previous_day(existing, bulletin.rows))
+            throw std::runtime_error(html_path + ": identical to " + egxq::format_date(*prev) +
+                                     " (a holiday, or the page was not updated). Not imported; pass --allow-repeat "
+                                     "if prices really did not change.");
+    }
     const auto merged = egxq::merge_by_date(existing, bulletin.rows);
     egxq::write_futures_csv(out, merged.rows);
 
@@ -209,7 +216,8 @@ int main(int argc, char** argv) {
         if (cmd == "snapshot" && argc == 4) return cmd_snapshot(argv[2], argv[3]);
         if (cmd == "import-investing" && argc == 5) return cmd_import_investing(argv[2], argv[3], argv[4]);
         if (cmd == "import-tbills" && argc == 4) return cmd_import_tbills(argv[2], argv[3]);
-        if (cmd == "import-futures" && argc == 5) return cmd_import_futures(argv[2], argv[3], argv[4]);
+        if (cmd == "import-futures" && (argc == 5 || (argc == 6 && std::string(argv[5]) == "--allow-repeat")))
+            return cmd_import_futures(argv[2], argv[3], argv[4], argc == 6);
         std::cerr << kUsage;
         return EXIT_FAILURE;
     } catch (const std::exception& e) {

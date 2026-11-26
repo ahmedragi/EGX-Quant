@@ -184,3 +184,32 @@ TEST(BasisHistory, SkipsDaysWithoutSpotOrRate) {
     h = basis_history(db, parse_date("2026-01-01"), parse_date("2026-12-31"));
     EXPECT_EQ(h.skipped_no_rate, 1u);
 }
+
+TEST(FuturesRepeat, DetectsHolidayCopyOfPreviousDay) {
+    const Date dec = parse_date("2026-12-16"), mar = parse_date("2027-03-17");
+    const std::vector<FuturesSettlement> existing{
+        {parse_date("2026-11-25"), "EGX30FDEC26", dec, 51925.0, 4, 0},
+        {parse_date("2026-11-26"), "EGX30FDEC26", dec, 51462.0, 6, 0},
+        {parse_date("2026-11-26"), "EGX30FMAR27", mar, 53747.0, 6, 0}};
+
+    // Saved on Sunday 2026-11-29 but showing Thursday's numbers.
+    const std::vector<FuturesSettlement> same{{parse_date("2026-11-29"), "EGX30FDEC26", dec, 51462.0, 6, 0},
+                                              {parse_date("2026-11-29"), "EGX30FMAR27", mar, 53747.0, 6, 0}};
+    const auto prev = repeats_previous_day(existing, same);
+    ASSERT_TRUE(prev.has_value());
+    EXPECT_EQ(format_date(*prev), "2026-11-26");
+
+    // A real new day differs in at least one price or volume.
+    auto moved = same;
+    moved[1].settle = 53800.0;
+    EXPECT_FALSE(repeats_previous_day(existing, moved).has_value());
+
+    // A missing contract is not a repeat either.
+    EXPECT_FALSE(repeats_previous_day(existing, {same[0]}).has_value());
+
+    // Re-importing the same day is not a "repeat of an earlier day".
+    std::vector<FuturesSettlement> again = same;
+    for (auto& f : again) f.date = parse_date("2026-11-26");
+    const auto p = repeats_previous_day(existing, again);
+    EXPECT_FALSE(p.has_value() && format_date(*p) == "2026-11-26");
+}

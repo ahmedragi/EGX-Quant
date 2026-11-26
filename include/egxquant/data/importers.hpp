@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <filesystem>
+#include <optional>
 #include <string_view>
 #include <vector>
 
@@ -70,6 +71,13 @@ struct FuturesBulletin {
 /// vs the previous day's settlement) and against traded value / volume, which
 /// catches misplaced decimal points.
 FuturesBulletin read_egx_futures_bulletin_html(const std::filesystem::path& path, const Date& trade_date);
+
+/// If `day` (one trading day's settlements) is identical, contract for contract
+/// in settlement and volume, to the latest earlier day in `existing`, return that
+/// earlier date. On a holiday the EGX page keeps showing the last trading day,
+/// so an identical bulletin means it was saved on a non-trading day.
+std::optional<Date> repeats_previous_day(const std::vector<FuturesSettlement>& existing,
+                                         const std::vector<FuturesSettlement>& day);
 
 /// Result of reading a T-bill auction workbook.
 struct TbillImport {
