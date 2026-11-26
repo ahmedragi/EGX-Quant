@@ -83,6 +83,12 @@ public:
     /// Futures settlements with from <= date <= to, ordered by date then expiry.
     std::vector<FuturesSettlement> futures_between(const Date& from, const Date& to) const;
 
+    /// USD/EGP rates with from <= date <= to, ascending.
+    std::vector<FxRate> fx_between(const Date& from, const Date& to) const;
+
+    /// CPI points with from <= month <= to, ascending.
+    std::vector<CpiPoint> cpi_between(const std::chrono::year_month& from, const std::chrono::year_month& to) const;
+
     DbSummary summary() const;
 
 private:

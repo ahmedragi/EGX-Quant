@@ -21,6 +21,9 @@ add_executable(egxquant_tests
     test_xlsx.cpp
     test_contract_spec.cpp
     test_futures_import.cpp
+    test_stats.cpp
+    test_var.cpp
+    test_risk_series.cpp
 )
 target_link_libraries(egxquant_tests PRIVATE egxquant::data egxq_warnings GTest::gtest_main)
 target_compile_definitions(egxquant_tests PRIVATE

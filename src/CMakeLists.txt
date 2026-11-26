@@ -5,6 +5,8 @@ add_library(egxquant
     futures/cost_of_carry.cpp
     futures/basis.cpp
     futures/contract_spec.cpp
+    risk/stats.cpp
+    risk/var.cpp
 )
 add_library(egxquant::egxquant ALIAS egxquant)
 
@@ -23,6 +25,7 @@ add_library(egxquant_data
     data/markup_util.cpp
     data/html_table.cpp
     data/basis_history.cpp
+    data/risk_series.cpp
 )
 add_library(egxquant::data ALIAS egxquant_data)
 

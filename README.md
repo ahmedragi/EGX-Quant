@@ -156,6 +156,47 @@ Each row also shows:
 
 Contract terms (codes `EGX30FMMMYY`, third-Wednesday expiry, two quarterly contracts, 1 EGP per point) are in [contract_spec.hpp](include/egxquant/futures/contract_spec.hpp), taken from the EGX specifications document.
 
+## Historical VaR and CVaR
+
+`egx_var` measures the risk of an EGX30 position from the closes in the database. Futures are delta-one, so index returns stand in for futures returns. Each view uses its own return series:
+- **EGP:** nominal pounds.
+- **USD:** EGX30 divided by USD/EGP, i.e. an unhedged foreign investor, with devaluations included.
+- **Real EGP:** EGX30 deflated by CPI, i.e. purchasing power. Monthly CPI is placed mid-month and log-interpolated, and this view needs CPI loaded.
+
+```bash
+./build/apps/egx_var --contracts 10 --out data/clean/var_backtest.csv
+```
+
+```
+[USD]  942 daily returns, 2023-01-03 to 2026-11-25
+  volatility 32.4% p.a.   mean 0.069%/day   skew -7.69   excess kurtosis 146.7
+  horizon  conf   hist VaR  hist CVaR     normal     sqrt-h        VaR USD       CVaR USD  samples
+       1d 99.0%      4.93%      9.01%      4.70%          -            456            834  942
+      10d 99.0%     26.04%     32.08%     14.40%     15.59%          2,408          2,967  933
+  worst days:  2024-03-06 -39.52%  2024-01-31 -6.69%  ...
+  backtest, 1-day VaR from the previous 250 days:
+    99.0%: 11 exceptions in 692 days (expected 6.9)  Kupiec LR 2.06  p = 0.151  ok
+```
+
+For each horizon and confidence level the output shows:
+- **Historical VaR:** the empirical loss quantile.
+- **CVaR:** the mean loss at or beyond the VaR.
+- **Normal VaR:** for comparison.
+- **sqrt-h:** the 1-day VaR scaled by √h.
+- **Amounts in the view's currency:** when you pass `--contracts` or `--notional`.
+
+The output also lists the worst days. A rolling one-day-ahead backtest is checked with Kupiec's proportion-of-failures test.
+
+In the USD view, the gap between the normal VaR and the historical CVaR is the devaluation jump on 2024-03-06. That gap is why Phase 4 models jumps.
+
+Other options:
+- `--short`
+- `--window n` (last n returns only)
+- `--from/--to`
+- `--view egp,usd,real`
+- `--confidence 95,99`
+- `--horizon 1,10`
+
 ## Layout
 
 ```
@@ -163,10 +204,11 @@ include/egxquant/
   core/       rates.hpp (compounding conversions), daycount.hpp (dates, ACT/365)
   futures/    cost_of_carry.hpp (fair value, implied rate), basis.hpp (bounds, signals),
               contract_spec.hpp (EGX30 codes, expiries, listing cycle)
+  risk/       stats.hpp (normal distribution, moments), var.hpp (historical/normal VaR, CVaR, Kupiec backtest)
   data/       market_csv.hpp (CSV formats), market_db.hpp (SQLite store), importers.hpp,
-              xlsx.hpp, html_table.hpp, basis_history.hpp, synthetic.hpp
-src/          implementations (egxquant: pricing core; egxquant_data: data pipeline + SQLite)
-apps/         egx_pricer, egx_synth, egx_db, egx_basis CLIs
+              xlsx.hpp, html_table.hpp, basis_history.hpp, risk_series.hpp (EGP/USD/real views), synthetic.hpp
+src/          implementations (egxquant: pricing + risk core; egxquant_data: data pipeline + SQLite)
+apps/         egx_pricer, egx_synth, egx_db, egx_basis, egx_var CLIs
 tools/        Windows scripts for daily data collection (Task Scheduler)
 tests/        GoogleTest suite (reference values computed independently), fixtures/
 data/         raw and cleaned market data (not committed)
@@ -184,7 +226,8 @@ data/         raw and cleaned market data (not committed)
   - [ ] Still to collect: daily futures bulletins (no archive exists; history starts 2026-11-26), CPI, dividend yield
 - [x] **Basis history:** `egx_basis` compares every settlement with fair value, the no-arbitrage band and the exchange formula
   - [ ] Chart fair value vs. market once enough daily bulletins are collected
-- [ ] **Phase 3 – Historical VaR/CVaR:** nominal and inflation-adjusted
+- [x] **Phase 3 – Historical VaR/CVaR:** nominal EGP, USD and real EGP views, normal VaR comparison, Kupiec backtest (`egx_var`)
+  - [ ] Load monthly CPI so the real-EGP view runs
 - [ ] **Phase 4 – Monte Carlo:** GBM + Merton jump-diffusion for EGP devaluation, USD-view VaR
 - [ ] **Phase 5 – Hedging & stress:** hedge ratio, margin simulation, 2016 and 2022–24 shock replays
 - [ ] **Phase 6 – Dashboard**

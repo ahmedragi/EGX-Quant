@@ -304,6 +304,23 @@ std::vector<FuturesSettlement> MarketDb::futures_between(const Date& from, const
     return out;
 }
 
+std::vector<FxRate> MarketDb::fx_between(const Date& from, const Date& to) const {
+    Stmt s(impl_->db, "SELECT date, rate FROM fx_usdegp WHERE date BETWEEN ?1 AND ?2 ORDER BY date");
+    s.bind(1, format_date(from)).bind(2, format_date(to));
+    std::vector<FxRate> out;
+    while (s.step()) out.push_back({s.date(0), s.real(1)});
+    return out;
+}
+
+std::vector<CpiPoint> MarketDb::cpi_between(const std::chrono::year_month& from,
+                                            const std::chrono::year_month& to) const {
+    Stmt s(impl_->db, "SELECT month, index_value FROM cpi WHERE month BETWEEN ?1 AND ?2 ORDER BY month");
+    s.bind(1, format_month(from)).bind(2, format_month(to));
+    std::vector<CpiPoint> out;
+    while (s.step()) out.push_back({parse_month(s.text(0)), s.real(1)});
+    return out;
+}
+
 DbSummary MarketDb::summary() const {
     return DbSummary{impl_->count("index_levels"), impl_->count("futures_settlements"),
                      impl_->count("tbill_auctions"), impl_->count("cpi"), impl_->count("fx_usdegp")};

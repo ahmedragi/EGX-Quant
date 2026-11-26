@@ -9,3 +9,6 @@ target_link_libraries(egx_db PRIVATE egxquant::data egxq_warnings)
 
 add_executable(egx_basis egx_basis/main.cpp)
 target_link_libraries(egx_basis PRIVATE egxquant::data egxq_warnings)
+
+add_executable(egx_var egx_var/main.cpp)
+target_link_libraries(egx_var PRIVATE egxquant::data egxq_warnings)
