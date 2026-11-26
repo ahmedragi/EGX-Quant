@@ -14,8 +14,17 @@ add_executable(egxquant_tests
     test_daycount.cpp
     test_cost_of_carry.cpp
     test_basis.cpp
+    test_csv.cpp
+    test_market_db.cpp
+    test_synthetic.cpp
+    test_importers.cpp
+    test_xlsx.cpp
+    test_contract_spec.cpp
+    test_futures_import.cpp
 )
-target_link_libraries(egxquant_tests PRIVATE egxquant::egxquant egxq_warnings GTest::gtest_main)
+target_link_libraries(egxquant_tests PRIVATE egxquant::data egxq_warnings GTest::gtest_main)
+target_compile_definitions(egxquant_tests PRIVATE
+    EGXQ_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
 
 include(GoogleTest)
 gtest_discover_tests(egxquant_tests)
