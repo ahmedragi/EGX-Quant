@@ -24,6 +24,8 @@ add_executable(egxquant_tests
     test_stats.cpp
     test_var.cpp
     test_risk_series.cpp
+    test_jump_diffusion.cpp
+    test_calibration.cpp
 )
 target_link_libraries(egxquant_tests PRIVATE egxquant::data egxq_warnings GTest::gtest_main)
 target_compile_definitions(egxquant_tests PRIVATE

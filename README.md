@@ -197,6 +197,50 @@ Other options:
 - `--confidence 95,99`
 - `--horizon 1,10`
 
+## Monte Carlo with devaluation jumps
+
+`egx_mc` models the EGX30 (in EGP) and USD/EGP as a two-factor **Merton jump-diffusion**. Each factor has a normal diffusion plus Poisson-timed normal jumps, and the two are linked in two ways:
+- **Correlation:** the diffusion parts of the two series are correlated.
+- **Pass-through:** the EGX30 also moves by β times every USD/EGP jump, which is its reaction in pounds on a devaluation day.
+
+How the model is fitted from the database history:
+1. **Jumps:** a day counts as a jump when its move is further from the median than max(k × robust vol, floor). The robust vol comes from the median absolute deviation, so a single devaluation can't inflate it. The floor matters for a managed currency, where most days barely move.
+2. **Pass-through:** fitted on the days USD/EGP jumped.
+3. **Correlation:** fitted on the days with no jump in either series.
+
+```bash
+./build/apps/egx_mc --contracts 10
+```
+
+```
+  USD/EGP jumps:  2023-01-04 +6.8%  2023-01-05 +2.8%  2023-01-11 +7.3%  2024-03-06 +60.4%  ...
+Chance of at least one devaluation jump:  1d 0.6%  10d 6.2%  21d 12.5%
+
+[USD]
+  horizon  conf     hist      GBM       JD     +/-    exact   JD CVaR      VaR USD     CVaR USD
+      10d 99.0%   26.04%   15.11%   26.27%   0.27%   26.19%    33.50%        2,429        3,098
+```
+
+Each row shows several VaR estimates:
+- **hist:** historical VaR.
+- **GBM:** a no-jump model with the same mean and volatility.
+- **JD:** the jump-diffusion VaR by Monte Carlo, followed by its standard error.
+- **exact:** the same VaR from the model's closed-form distribution. A Poisson-weighted mixture of normals, it checks the simulation.
+
+The GBM understates 10-day 99% USD risk by about 11 points, and the jump model recovers it.
+
+Simulation samples the horizon return directly, without time steps. It's deterministic for a given `--seed`, and identical across platforms because the random numbers come from the project's own generator.
+
+The scenario flags `--fx-jump-rate`, `--fx-jump-size` (% rise in USD/EGP), `--fx-jump-stdev` and `--passthrough` replace the fitted values:
+
+```bash
+./build/apps/egx_mc --fx-jump-rate 0.5 --fx-jump-size 40 --horizon 21   # a 40% devaluation every two years
+```
+
+In these scenarios the total drift stays at its historical value, and the diffusion drift absorbs the change in expected jumps.
+
+**Fitted jump sizes are normal, so they can also come out negative (an appreciation).** That's because the 2023–2026 sample includes one appreciation day (2026-04-08). If you want devaluation-only scenarios, set the size and spread yourself.
+
 ## Layout
 
 ```
@@ -204,11 +248,13 @@ include/egxquant/
   core/       rates.hpp (compounding conversions), daycount.hpp (dates, ACT/365)
   futures/    cost_of_carry.hpp (fair value, implied rate), basis.hpp (bounds, signals),
               contract_spec.hpp (EGX30 codes, expiries, listing cycle)
-  risk/       stats.hpp (normal distribution, moments), var.hpp (historical/normal VaR, CVaR, Kupiec backtest)
+  risk/       stats.hpp (normal distribution, moments), var.hpp (historical/normal VaR, CVaR, Kupiec backtest),
+              random.hpp (portable RNG), jump_diffusion.hpp (Merton model, simulation, exact mixture),
+              calibration.hpp (jump detection and fitting)
   data/       market_csv.hpp (CSV formats), market_db.hpp (SQLite store), importers.hpp,
               xlsx.hpp, html_table.hpp, basis_history.hpp, risk_series.hpp (EGP/USD/real views), synthetic.hpp
 src/          implementations (egxquant: pricing + risk core; egxquant_data: data pipeline + SQLite)
-apps/         egx_pricer, egx_synth, egx_db, egx_basis, egx_var CLIs
+apps/         egx_pricer, egx_synth, egx_db, egx_basis, egx_var, egx_mc CLIs
 tools/        Windows scripts for daily data collection (Task Scheduler)
 tests/        GoogleTest suite (reference values computed independently), fixtures/
 data/         raw and cleaned market data (not committed)
@@ -228,7 +274,7 @@ data/         raw and cleaned market data (not committed)
   - [ ] Chart fair value vs. market once enough daily bulletins are collected
 - [x] **Phase 3 – Historical VaR/CVaR:** nominal EGP, USD and real EGP views, normal VaR comparison, Kupiec backtest (`egx_var`)
   - [ ] Load monthly CPI so the real-EGP view runs
-- [ ] **Phase 4 – Monte Carlo:** GBM + Merton jump-diffusion for EGP devaluation, USD-view VaR
+- [x] **Phase 4 – Monte Carlo:** two-factor Merton jump-diffusion (EGX30 + USD/EGP) fitted to history, devaluation scenarios, EGP and USD VaR checked against the exact distribution (`egx_mc`)
 - [ ] **Phase 5 – Hedging & stress:** hedge ratio, margin simulation, 2016 and 2022–24 shock replays
 - [ ] **Phase 6 – Dashboard**
 

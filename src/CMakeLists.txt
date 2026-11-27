@@ -7,6 +7,8 @@ add_library(egxquant
     futures/contract_spec.cpp
     risk/stats.cpp
     risk/var.cpp
+    risk/jump_diffusion.cpp
+    risk/calibration.cpp
 )
 add_library(egxquant::egxquant ALIAS egxquant)
 

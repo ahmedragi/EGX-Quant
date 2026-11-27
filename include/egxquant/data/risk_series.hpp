@@ -39,6 +39,21 @@ ViewSeries in_usd(const std::vector<IndexLevel>& egp, const std::vector<FxRate>&
 /// `cpi` must be sorted by month.
 ViewSeries deflated(const std::vector<IndexLevel>& egp, const std::vector<CpiPoint>& cpi);
 
+/// An EGX30 close with the USD/EGP rate in force that day.
+struct IndexFxPoint {
+    Date date;
+    double index = 0.0;
+    double fx = 0.0;
+};
+
+/// Pair each EGX30 close with the latest USD/EGP rate on or before its date,
+/// dropping closes whose rate is missing or older than `max_stale_days`.
+std::vector<IndexFxPoint> align_index_fx(const std::vector<IndexLevel>& egp, const std::vector<FxRate>& fx,
+                                         int max_stale_days = 7);
+
+/// The aligned EGX30 / USD-EGP series between two dates, from the database.
+std::vector<IndexFxPoint> index_fx_between(const MarketDb& db, const Date& from, const Date& to);
+
 /// The EGX30 series between two dates in one view, read from the database.
 ViewSeries index_view(const MarketDb& db, const Date& from, const Date& to, RiskView view);
 

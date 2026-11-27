@@ -10,6 +10,7 @@
 #include "egxquant/core/rates.hpp"
 #include "egxquant/futures/contract_spec.hpp"
 #include "egxquant/futures/cost_of_carry.hpp"
+#include "egxquant/risk/random.hpp"
 
 namespace egxq {
 
@@ -17,37 +18,7 @@ using namespace std::chrono;
 
 namespace {
 
-/// Portable RNG: mt19937_64 is fully specified by the standard; the
-/// conversions to uniform and normal below are our own, so the stream of
-/// numbers is identical on every compiler.
-class Rng {
-public:
-    explicit Rng(std::uint64_t seed) : eng_(seed) {}
-
-    /// Uniform in the open interval (0, 1).
-    double uniform() {
-        return (static_cast<double>(eng_() >> 11) + 0.5) * 0x1.0p-53;
-    }
-
-    /// Standard normal via Box-Muller.
-    double normal() {
-        if (has_spare_) {
-            has_spare_ = false;
-            return spare_;
-        }
-        const double u1 = uniform(), u2 = uniform();
-        const double r = std::sqrt(-2.0 * std::log(u1));
-        const double theta = 2.0 * 3.14159265358979323846 * u2;
-        spare_ = r * std::sin(theta);
-        has_spare_ = true;
-        return r * std::cos(theta);
-    }
-
-private:
-    std::mt19937_64 eng_;
-    double spare_ = 0.0;
-    bool has_spare_ = false;
-};
+using risk::Rng;  // portable: the same stream on every compiler
 
 double round_to(double v, int decimals) {
     const double f = std::pow(10.0, decimals);
