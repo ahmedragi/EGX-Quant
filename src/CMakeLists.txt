@@ -39,3 +39,14 @@ target_link_libraries(egxquant_data
     PUBLIC  egxquant::egxquant
     PRIVATE SQLite::SQLite3 miniz::miniz egxq_warnings)
 target_compile_features(egxquant_data PUBLIC cxx_std_20)
+
+# Reporting: SVG charts and the HTML dashboard.
+add_library(egxquant_report
+    report/chart.cpp
+    report/dashboard.cpp
+)
+add_library(egxquant::report ALIAS egxquant_report)
+
+target_include_directories(egxquant_report PUBLIC ${PROJECT_SOURCE_DIR}/include)
+target_link_libraries(egxquant_report PUBLIC egxquant::data PRIVATE egxq_warnings)
+target_compile_features(egxquant_report PUBLIC cxx_std_20)

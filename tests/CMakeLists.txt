@@ -27,8 +27,9 @@ add_executable(egxquant_tests
     test_jump_diffusion.cpp
     test_calibration.cpp
     test_hedging.cpp
+    test_report.cpp
 )
-target_link_libraries(egxquant_tests PRIVATE egxquant::data egxq_warnings GTest::gtest_main)
+target_link_libraries(egxquant_tests PRIVATE egxquant::report egxq_warnings GTest::gtest_main)
 target_compile_definitions(egxquant_tests PRIVATE
     EGXQ_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
 

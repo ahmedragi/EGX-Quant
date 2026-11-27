@@ -55,4 +55,10 @@ struct StressResult {
 StressResult stress_replay(std::span<const double> index_log, std::span<const double> fx_log,
                            const StressPosition& pos, const MarginRules& rules, double multiplier);
 
+/// An instant shock: the EGX30 moves by `index_move` and USD/EGP by `fx_move`
+/// (fractions, e.g. -0.2) on day one, then nothing, for as many sessions as the
+/// futures need to reach the shocked level within the price limit.
+StressResult instant_shock(double index_move, double fx_move, const StressPosition& pos, const MarginRules& rules,
+                           double multiplier);
+
 }  // namespace egxq::risk

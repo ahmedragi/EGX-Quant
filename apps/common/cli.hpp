@@ -11,6 +11,8 @@
 #include <string>
 #include <vector>
 
+#include "egxquant/core/format.hpp"
+
 namespace egxq::cli {
 
 /// "--key value" options plus bare "--flag" switches named in `switches`.
@@ -49,26 +51,9 @@ inline std::vector<std::string> split(const std::string& s) {
     return out;
 }
 
-inline std::string num(double v, int decimals) {
-    char buf[64];
-    std::snprintf(buf, sizeof buf, "%.*f", decimals, v);
-    return buf;
-}
-
-inline std::string pct(double v, int decimals = 2) { return num(v * 100.0, decimals) + "%"; }
-
-inline std::string signed_pct(double v, int decimals = 1) { return (v >= 0 ? "+" : "") + pct(v, decimals); }
-
-/// 1234567.8 -> "1,234,568"; -1234 -> "-1,234"
-inline std::string money(double v) {
-    const bool neg = std::llround(v) < 0;
-    const auto digits = std::to_string(static_cast<long long>(std::llround(std::fabs(v))));
-    std::string out;
-    for (std::size_t i = 0; i < digits.size(); ++i) {
-        if (i > 0 && (digits.size() - i) % 3 == 0) out += ',';
-        out += digits[i];
-    }
-    return neg ? "-" + out : out;
-}
+using fmt::money;
+using fmt::num;
+using fmt::pct;
+using fmt::signed_pct;
 
 }  // namespace egxq::cli

@@ -14,7 +14,8 @@
     Each new file is copied into data/raw/, imported into data/clean/ with egx_db,
     and recorded by SHA-256 in data/raw/ingested.tsv so it is never processed twice
     (originals in the inbox are left alone). If anything was imported, the database
-    is reloaded and egx_basis writes data/clean/basis_history.csv.
+    is reloaded, egx_basis writes data/clean/basis_history.csv and egx_dashboard
+    refreshes data/clean/dashboard.html.
 
     Bulletin trading date: taken from a YYYY-MM-DD in the file name if present,
     otherwise from when the file was saved (Cairo time on this PC):
@@ -42,6 +43,7 @@ if (-not $DataDir) { $DataDir = Join-Path $Repo 'data' }
 $Bin      = Join-Path $Repo 'build\apps\Release'
 $EgxDb    = Join-Path $Bin 'egx_db.exe'
 $EgxBasis = Join-Path $Bin 'egx_basis.exe'
+$EgxDash  = Join-Path $Bin 'egx_dashboard.exe'
 $Raw      = Join-Path $DataDir 'raw'
 $Clean    = Join-Path $DataDir 'clean'
 $Db       = Join-Path $DataDir 'egx.db'
@@ -229,6 +231,10 @@ try {
         $r = Invoke-Tool $EgxBasis @('--db', $Db, '--out', (Join-Path $Clean 'basis_history.csv'))
         if ($r.Code -ne 0) { Write-Log "FAIL  egx_basis: $($r.Output)"; exit 1 }
         foreach ($l in (($r.Output -split "`n") | Select-Object -Last 4)) { Write-Log "        $l" }
+        if (Test-Path -LiteralPath $EgxDash) {
+            $r = Invoke-Tool $EgxDash @('--db', $Db, '--out', (Join-Path $Clean 'dashboard.html'))
+            if ($r.Code -ne 0) { Write-Log "FAIL  egx_dashboard: $($r.Output)" } else { Write-Log "OK    $($r.Output.Trim())" }
+        }
 
         # Warn when spot lags the futures (the basis is then computed against a stale close).
         $lastDate = {

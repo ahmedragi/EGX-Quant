@@ -18,6 +18,7 @@
 #include "egxquant/futures/contract_spec.hpp"
 #include "egxquant/risk/calibration.hpp"
 #include "egxquant/risk/margin.hpp"
+#include "egxquant/risk/scenarios.hpp"
 #include "egxquant/risk/stress.hpp"
 
 namespace {
@@ -60,19 +61,8 @@ margin:
   --db <file>              Database (default data/egx.db)
 )";
 
-struct Scenario {
-    const char* name;
-    const char* from;
-    const char* to;
-    const char* what;
-};
-
-constexpr Scenario kScenarios[] = {
-    {"float-2016", "2016-10-20", "2016-12-30", "CBE floats the pound, 3 Nov 2016"},
-    {"deval-2022-03", "2022-03-14", "2022-04-29", "Devaluation of 21 Mar 2022"},
-    {"deval-2022-10", "2022-10-20", "2023-01-31", "Flexible rate from 27 Oct 2022, slide into Jan 2023"},
-    {"float-2024", "2024-02-25", "2024-04-30", "Float of 6 Mar 2024"},
-};
+using egxq::risk::kScenarios;
+using egxq::risk::Scenario;
 
 struct Setup {
     StressPosition pos;
@@ -131,7 +121,9 @@ void print_position(const Setup& s) {
 
 int cmd_replay(const egxq::MarketDb& db, const Args& a) {
     if (a.flag("list")) {
-        for (const auto& sc : kScenarios) std::printf("  %-14s %s to %s  %s\n", sc.name, sc.from, sc.to, sc.what);
+        for (const auto& sc : kScenarios)
+            std::printf("  %-14s %s to %s  %s\n", std::string(sc.name).c_str(), std::string(sc.from).c_str(),
+                        std::string(sc.to).c_str(), std::string(sc.what).c_str());
         return EXIT_SUCCESS;
     }
     std::vector<Scenario> run;
@@ -139,7 +131,7 @@ int cmd_replay(const egxq::MarketDb& db, const Args& a) {
     if (a.has("from") || a.has("to")) {
         custom_from = a.get("from", "1900-03-01");
         custom_to = a.get("to", "2999-12-31");
-        run.push_back({"custom", custom_from.c_str(), custom_to.c_str(), "custom window"});
+        run.push_back({"custom", custom_from, custom_to, "custom window"});
     } else if (a.has("scenario")) {
         for (const auto& sc : kScenarios)
             if (a.opts.at("scenario") == sc.name) run.push_back(sc);
@@ -157,23 +149,25 @@ int cmd_replay(const egxq::MarketDb& db, const Args& a) {
     for (const auto& sc : run) {
         const auto from = egxq::parse_date(sc.from), to = egxq::parse_date(sc.to);
         const auto pts = egxq::index_fx_between(db, from, to);
+        const std::string name(sc.name);
         if (pts.size() < 2) {
-            missing.push_back(sc.name);
-            std::printf("%-14s %s..%s  no data\n", sc.name, sc.from, sc.to);
+            missing.push_back(name);
+            std::printf("%-14s %s..%s  no data\n", name.c_str(), std::string(sc.from).c_str(),
+                        std::string(sc.to).c_str());
             continue;
         }
         const auto logs = egxq::daily_log_returns(pts);
         const auto r = egxq::risk::stress_replay(logs.index, logs.fx, setup.pos, setup.rules, egxq::egx30::kMultiplier);
         const auto& end = r.days.back();
         const std::string period = egxq::format_date(pts.front().date) + ".." + egxq::format_date(pts.back().date);
-        std::printf("%-14s %-22s %4zu %8s %8s %6zu %5zu %10s %12s %12s %10s %10s %10s\n", sc.name, period.c_str(),
+        std::printf("%-14s %-22s %4zu %8s %8s %6zu %5zu %10s %12s %12s %10s %10s %10s\n", name.c_str(), period.c_str(),
                     r.days.size(), signed_pct(end.index_level - 1.0).c_str(),
                     signed_pct(end.fx / setup.pos.fx - 1.0).c_str(), r.locked_days, r.margin.calls,
                     money(r.margin.total_called).c_str(), money(r.worst_pnl_egp).c_str(), money(end.pnl_egp).c_str(),
                     money(r.worst_pnl_usd).c_str(), money(end.pnl_usd).c_str(), money(end.unhedged_pnl_usd).c_str());
         if (std::chrono::sys_days{pts.front().date} > std::chrono::sys_days{from} + std::chrono::days{7})
             std::printf("%-14s (data starts %s, after the scenario start %s)\n", "",
-                        egxq::format_date(pts.front().date).c_str(), sc.from);
+                        egxq::format_date(pts.front().date).c_str(), std::string(sc.from).c_str());
 
         if (a.flag("daily") && run.size() == 1) {
             std::printf("\n%-10s %9s %9s %10s %6s %10s %12s %10s\n", "date", "EGX30", "USD/EGP", "settle", "lock",
@@ -210,14 +204,7 @@ int cmd_grid(const egxq::MarketDb& db, const Args& a) {
                 "P&L USD", "basket USD");
     for (double fs : fx_shocks)
         for (double is : idx_shocks) {
-            if (is <= -1.0 || fs <= -1.0) throw std::invalid_argument("shocks must be above -100%");
-            const double li = std::log1p(is);
-            const double lim = std::log1p(setup.rules.price_limit);
-            const auto days = static_cast<std::size_t>(std::ceil(std::fabs(li) / lim - 1e-12)) + 1;
-            std::vector<double> il(days, 0.0), fl(days, 0.0);
-            il[0] = li;
-            fl[0] = std::log1p(fs);
-            const auto r = egxq::risk::stress_replay(il, fl, setup.pos, setup.rules, egxq::egx30::kMultiplier);
+            const auto r = egxq::risk::instant_shock(is, fs, setup.pos, setup.rules, egxq::egx30::kMultiplier);
             const auto& end = r.days.back();
             std::printf("%7s %8s %6zu %6zu %10s %12s %10s %11s\n", signed_pct(is, 0).c_str(), signed_pct(fs, 0).c_str(),
                         r.locked_days + 1, r.margin.calls, money(r.margin.total_called).c_str(),

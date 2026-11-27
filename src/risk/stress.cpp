@@ -56,4 +56,17 @@ StressResult stress_replay(std::span<const double> index_log, std::span<const do
     return r;
 }
 
+StressResult instant_shock(double index_move, double fx_move, const StressPosition& pos, const MarginRules& rules,
+                           double multiplier) {
+    if (index_move <= -1.0 || fx_move <= -1.0) throw std::invalid_argument("instant_shock: moves must be above -100%");
+    const double li = std::log1p(index_move);
+    // Sessions needed at the limit (a fall uses log(1 - limit), a rise log(1 + limit)), plus one spare.
+    const double step = li < 0 ? -std::log1p(-rules.price_limit) : std::log1p(rules.price_limit);
+    const auto days = static_cast<std::size_t>(std::ceil(std::fabs(li) / step - 1e-12)) + 1;
+    std::vector<double> il(days, 0.0), fl(days, 0.0);
+    il[0] = li;
+    fl[0] = std::log1p(fx_move);
+    return stress_replay(il, fl, pos, rules, multiplier);
+}
+
 }  // namespace egxq::risk

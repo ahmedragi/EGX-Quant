@@ -117,7 +117,7 @@ EGX and Investing.com block automated downloads with bot protection, so saving t
 | Script | What it does |
 |---|---|
 | `open-bulletin.ps1` | Opens the EGX futures page (Sun–Thu); on Thursdays also the Investing.com EGX30 and USD/EGP history pages |
-| `collect.ps1` | Finds new bulletins, EGX30/USD-EGP exports and T-bill workbooks in Downloads, then files, dates, imports and loads them and runs `egx_basis` |
+| `collect.ps1` | Finds new bulletins, EGX30/USD-EGP exports and T-bill workbooks in Downloads, then files, dates, imports and loads them, runs `egx_basis` and refreshes the dashboard |
 | `install-tasks.ps1` | Registers both as Task Scheduler tasks in `\egx-quant\` (`-Remove` to undo) |
 
 ```powershell
@@ -303,6 +303,29 @@ What the replays show:
 
 **The 2016 and 2022 windows need data from before 2023.** Download a longer EGX30 and USD/EGP history from Investing.com: `egx_db import-investing` merges it with what's already loaded.
 
+## Dashboard
+
+`egx_dashboard` writes **one self-contained HTML page** from the database: inline CSS, SVG charts and a small hover script, with nothing loaded from the network. Open it in any browser. `tools/collect.ps1` regenerates it each time new data is imported.
+
+```bash
+./build/apps/egx_dashboard                        # writes data/clean/dashboard.html
+./build/apps/egx_dashboard --contracts -20 --div-yield 3.5
+```
+
+The page has these sections:
+
+| Section | Contents |
+|---|---|
+| Notices | Stale data: spot older than the latest bulletin, missing CPI, missing stress windows |
+| Market | EGX30, USD/EGP, EGX30 in USD, the 91-day T-bill and the nearest futures contract, with daily and monthly changes |
+| Futures and basis | The latest settlements against fair value, the exchange formula, the implied rate, the no-arbitrage band and the signal; a chart of mispricing by contract over time |
+| History | EGX30 in pounds and dollars, both indexed to 100; USD/EGP with the days the model counts as devaluation jumps |
+| Value at Risk | Historical, normal and jump-diffusion VaR/CVaR in EGP and USD for the position; the rolling backtest chart with exceptions and Kupiec tests |
+| Stress tests and margin | Scenario replays, the instant-shock grid, and margin-call odds with the cash to keep ready |
+| Data | Row counts and date ranges per table |
+
+The charts follow light or dark mode, show values on hover, and use a colour palette checked for colour-blind readers. The output is deterministic for a given `--seed`.
+
 ## Layout
 
 ```
@@ -313,11 +336,15 @@ include/egxquant/
   risk/       stats.hpp (normal distribution, moments), var.hpp (historical/normal VaR, CVaR, Kupiec backtest),
               random.hpp (portable RNG), jump_diffusion.hpp (Merton model, simulation, exact mixture),
               calibration.hpp (jump detection and fitting), hedge.hpp (minimum-variance hedge),
-              margin.hpp (price limits, margin account, margin Monte Carlo), stress.hpp (scenario replay)
+              margin.hpp (price limits, margin account, margin Monte Carlo), stress.hpp (scenario replay),
+              scenarios.hpp (built-in stress windows)
+  report/     chart.hpp (SVG time-series charts), dashboard.hpp (the HTML dashboard)
+  core/       format.hpp (number formatting)
   data/       market_csv.hpp (CSV formats), market_db.hpp (SQLite store), importers.hpp,
               xlsx.hpp, html_table.hpp, basis_history.hpp, risk_series.hpp (EGP/USD/real views), synthetic.hpp
-src/          implementations (egxquant: pricing + risk core; egxquant_data: data pipeline + SQLite)
-apps/         egx_pricer, egx_synth, egx_db, egx_basis, egx_var, egx_mc, egx_hedge, egx_stress CLIs
+src/          implementations (egxquant: pricing + risk core; egxquant_data: data pipeline + SQLite;
+              egxquant_report: charts and dashboard)
+apps/         egx_pricer, egx_synth, egx_db, egx_basis, egx_var, egx_mc, egx_hedge, egx_stress, egx_dashboard CLIs
               (common/cli.hpp: shared option parsing and formatting)
 tools/        Windows scripts for daily data collection (Task Scheduler)
 tests/        GoogleTest suite (reference values computed independently), fixtures/
@@ -335,14 +362,14 @@ data/         raw and cleaned market data (not committed)
   - [x] EGX futures bulletin importer (saved HTML, Arabic or English) and contract calendar from the EGX specs
   - [ ] Still to collect: daily futures bulletins (no archive exists; history starts 2026-11-26), CPI, dividend yield
 - [x] **Basis history:** `egx_basis` compares every settlement with fair value, the no-arbitrage band and the exchange formula
-  - [ ] Chart fair value vs. market once enough daily bulletins are collected
+  - [x] Chart fair value vs. market (dashboard; fills in as daily bulletins are collected)
 - [x] **Phase 3 – Historical VaR/CVaR:** nominal EGP, USD and real EGP views, normal VaR comparison, Kupiec backtest (`egx_var`)
   - [ ] Load monthly CPI so the real-EGP view runs
 - [x] **Phase 4 – Monte Carlo:** two-factor Merton jump-diffusion (EGX30 + USD/EGP) fitted to history, devaluation scenarios, EGP and USD VaR checked against the exact distribution (`egx_mc`)
 - [x] **Phase 5 – Hedging & stress:** minimum-variance hedge ratio (`egx_hedge`), margin account with the ±10% price limit, margin-call Monte Carlo, shock grid and scenario replays (`egx_stress`)
   - [ ] Load EGX30 and USD/EGP history from before 2023 to run the 2016 and 2022 replays
   - [ ] Confirm EGX's maintenance margin (75% of initial is assumed)
-- [ ] **Phase 6 – Dashboard**
+- [x] **Phase 6 – Dashboard:** self-contained HTML page from the database (`egx_dashboard`), refreshed by the daily collector
 
 ## Disclaimer
 
