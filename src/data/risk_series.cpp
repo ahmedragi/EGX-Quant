@@ -58,6 +58,16 @@ std::vector<IndexFxPoint> index_fx_between(const MarketDb& db, const Date& from,
     return align_index_fx(db.index_between(from, to), db.fx_between(fx_from, to));
 }
 
+DailyLogReturns daily_log_returns(const std::vector<IndexFxPoint>& points) {
+    DailyLogReturns r;
+    for (std::size_t i = 1; i < points.size(); ++i) {
+        r.dates.push_back(points[i].date);
+        r.index.push_back(std::log(points[i].index / points[i - 1].index));
+        r.fx.push_back(std::log(points[i].fx / points[i - 1].fx));
+    }
+    return r;
+}
+
 ViewSeries in_usd(const std::vector<IndexLevel>& egp, const std::vector<FxRate>& fx, int max_stale_days) {
     ViewSeries out;
     out.view = RiskView::Usd;

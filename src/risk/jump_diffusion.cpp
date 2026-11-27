@@ -52,37 +52,67 @@ double index_diffusion_drift(const EgxFxModel& m) {
 
 double fx_diffusion_drift(const EgxFxModel& m) { return m.fx.drift - m.fx.jump_rate * m.fx.jump_mean; }
 
-std::vector<HorizonDraw> simulate_horizon(const EgxFxModel& m, double years, std::size_t paths, std::uint64_t seed) {
-    check(m, years);
-    Rng rng(seed);
-    const double sq = std::sqrt(years);
-    const double a_s = index_diffusion_drift(m) * years;
-    const double a_x = fx_diffusion_drift(m) * years;
-    const double lam_s = m.index.jump_rate * years;
-    const double lam_x = m.fx.jump_rate * years;
-    const double rho_c = std::sqrt(1.0 - m.rho * m.rho);
+namespace {
 
-    std::vector<HorizonDraw> out;
-    out.reserve(paths);
-    for (std::size_t i = 0; i < paths; ++i) {
+/// Draws the log returns of one period of a fixed length.
+class Stepper {
+public:
+    Stepper(const EgxFxModel& m, double years)
+        : m_(m),
+          sq_(std::sqrt(years)),
+          a_s_(index_diffusion_drift(m) * years),
+          a_x_(fx_diffusion_drift(m) * years),
+          lam_s_(m.index.jump_rate * years),
+          lam_x_(m.fx.jump_rate * years),
+          rho_c_(std::sqrt(1.0 - m.rho * m.rho)) {}
+
+    HorizonDraw draw(Rng& rng) const {
         const double z1 = rng.normal();
         const double z2 = rng.normal();
-        const unsigned n_s = rng.poisson(lam_s);
-        const unsigned n_x = rng.poisson(lam_x);
+        const unsigned n_s = rng.poisson(lam_s_);
+        const unsigned n_x = rng.poisson(lam_x_);
         double j_s = 0.0, j_x = 0.0;
         // The sum of n normal jumps is Normal(n * mean, n * stdev^2).
         if (n_s > 0) {
             const double n = static_cast<double>(n_s);
-            j_s = n * m.index.jump_mean + std::sqrt(n) * m.index.jump_stdev * rng.normal();
+            j_s = n * m_.index.jump_mean + std::sqrt(n) * m_.index.jump_stdev * rng.normal();
         }
         if (n_x > 0) {
             const double n = static_cast<double>(n_x);
-            j_x = n * m.fx.jump_mean + std::sqrt(n) * m.fx.jump_stdev * rng.normal();
+            j_x = n * m_.fx.jump_mean + std::sqrt(n) * m_.fx.jump_stdev * rng.normal();
         }
+        const double r_s = a_s_ + m_.index.sigma * sq_ * z1 + j_s + m_.passthrough * j_x;
+        const double r_x = a_x_ + m_.fx.sigma * sq_ * (m_.rho * z1 + rho_c_ * z2) + j_x;
+        return {r_s, r_s - r_x};
+    }
 
-        const double r_s = a_s + m.index.sigma * sq * z1 + j_s + m.passthrough * j_x;
-        const double r_x = a_x + m.fx.sigma * sq * (m.rho * z1 + rho_c * z2) + j_x;
-        out.push_back({r_s, r_s - r_x});
+private:
+    const EgxFxModel& m_;
+    double sq_, a_s_, a_x_, lam_s_, lam_x_, rho_c_;
+};
+
+}  // namespace
+
+std::vector<HorizonDraw> simulate_horizon(const EgxFxModel& m, double years, std::size_t paths, std::uint64_t seed) {
+    check(m, years);
+    Rng rng(seed);
+    const Stepper step(m, years);
+    std::vector<HorizonDraw> out;
+    out.reserve(paths);
+    for (std::size_t i = 0; i < paths; ++i) out.push_back(step.draw(rng));
+    return out;
+}
+
+std::vector<std::vector<HorizonDraw>> simulate_daily_paths(const EgxFxModel& m, std::size_t days, std::size_t paths,
+                                                           std::uint64_t seed, double days_per_year) {
+    if (!(days_per_year > 0.0)) throw std::invalid_argument("simulate_daily_paths: days_per_year must be positive");
+    check(m, 1.0 / days_per_year);
+    Rng rng(seed);
+    const Stepper step(m, 1.0 / days_per_year);
+    std::vector<std::vector<HorizonDraw>> out(paths);
+    for (auto& path : out) {
+        path.reserve(days);
+        for (std::size_t d = 0; d < days; ++d) path.push_back(step.draw(rng));
     }
     return out;
 }

@@ -241,6 +241,68 @@ In these scenarios the total drift stays at its historical value, and the diffus
 
 **Fitted jump sizes are normal, so they can also come out negative (an appreciation).** That's because the 2023–2026 sample includes one appreciation day (2026-04-08). If you want devaluation-only scenarios, set the size and spread yourself.
 
+## Hedging, margin and stress tests
+
+### Hedge ratio
+
+`egx_hedge` works out how many futures to sell against a stock portfolio. With `--portfolio`, it fits the minimum-variance hedge ratio, which is the portfolio's beta to the EGX30 on their common dates, and the hedge effectiveness (R²). The portfolio file can be an Investing.com history export of a stock, or a `date,value` CSV. You can also pass `--beta` yourself.
+
+```bash
+./build/apps/egx_hedge --portfolio "data/raw/investing/COMI Historical Data.csv" --value 2000000
+./build/apps/egx_hedge --beta 1.2 --value 2000000 --contract EGX30FMAR27
+```
+
+```
+Hedge for 2,000,000 EGP at 53747.00 (EGX30FMAR27 settlement 2026-11-26)
+  contracts to sell        44.65  -> 45
+  initial margin         265,500 EGP (5,900 per contract)
+```
+
+### Margin and price limits
+
+Futures settle daily within the exchange's **±10% price limit** (EGX specs). A bigger move than that is realised over several sessions. The margin account works like this:
+1. It starts with the initial margin per contract.
+2. Each day, the change in settlement price is credited or debited as variation margin.
+3. When the balance falls below the maintenance margin, a margin call tops it back up to the initial margin.
+
+The initial margin comes from the EGX bulletin (5,900 EGP). The default maintenance margin is 75% of that, which is an assumption. Pass `--maintenance` once EGX's figure is known.
+
+### Stress tests
+
+`egx_stress` has three commands:
+
+| Command | What it does |
+|---|---|
+| `replay` | Runs today's position through the daily EGX30 and USD/EGP moves of past shocks |
+| `grid` | Applies instant EGX30 × USD/EGP shocks, settled within the price limit |
+| `margin` | Gives Monte Carlo margin-call odds and the cash to keep ready (liquidity at risk), from the Phase 4 jump-diffusion |
+
+The built-in replay scenarios (`replay --list`):
+- the 2016 float;
+- March 2022;
+- October 2022 to January 2023;
+- March 2024.
+
+```bash
+./build/apps/egx_stress replay --basket 1000000 --hedge     # basket plus short futures
+./build/apps/egx_stress replay --scenario float-2024 --daily
+./build/apps/egx_stress grid --contracts 10
+./build/apps/egx_stress margin --contracts 10 --days 21
+```
+
+```
+scenario       period                 days    EGX30  USD/EGP locked calls     called    worst EGP      end EGP  worst USD    end USD basket USD
+float-2024     2024-02-25..2024-04-30   42   -12.2%   +54.9%      0     3    178,379       -2,708       -2,708     -7,642     -7,240     -7,922
+```
+
+What the replays show:
+- **In pounds the hedge works.** A 1,000,000 EGP basket shorted with 19 contracts ends the 2024 float within 3,000 EGP of where it started.
+- **The hedge costs cash.** The index rallied before it fell, so the short futures drew 178,000 EGP of margin calls.
+- **In dollars the hedge barely helps.** It ends at −7,240 USD against −7,922 USD unhedged, because the devaluation hits the basket and the margin deposit alike.
+- **The hedge can make dollar losses worse.** In the October 2022 to January 2023 replay, the EGX30 rose in pounds and partly made up for the devaluation. Shorting futures gave that gain away, so the hedged position lost more in dollars than the unhedged basket.
+
+**The 2016 and 2022 windows need data from before 2023.** Download a longer EGX30 and USD/EGP history from Investing.com: `egx_db import-investing` merges it with what's already loaded.
+
 ## Layout
 
 ```
@@ -250,11 +312,13 @@ include/egxquant/
               contract_spec.hpp (EGX30 codes, expiries, listing cycle)
   risk/       stats.hpp (normal distribution, moments), var.hpp (historical/normal VaR, CVaR, Kupiec backtest),
               random.hpp (portable RNG), jump_diffusion.hpp (Merton model, simulation, exact mixture),
-              calibration.hpp (jump detection and fitting)
+              calibration.hpp (jump detection and fitting), hedge.hpp (minimum-variance hedge),
+              margin.hpp (price limits, margin account, margin Monte Carlo), stress.hpp (scenario replay)
   data/       market_csv.hpp (CSV formats), market_db.hpp (SQLite store), importers.hpp,
               xlsx.hpp, html_table.hpp, basis_history.hpp, risk_series.hpp (EGP/USD/real views), synthetic.hpp
 src/          implementations (egxquant: pricing + risk core; egxquant_data: data pipeline + SQLite)
-apps/         egx_pricer, egx_synth, egx_db, egx_basis, egx_var, egx_mc CLIs
+apps/         egx_pricer, egx_synth, egx_db, egx_basis, egx_var, egx_mc, egx_hedge, egx_stress CLIs
+              (common/cli.hpp: shared option parsing and formatting)
 tools/        Windows scripts for daily data collection (Task Scheduler)
 tests/        GoogleTest suite (reference values computed independently), fixtures/
 data/         raw and cleaned market data (not committed)
@@ -275,7 +339,9 @@ data/         raw and cleaned market data (not committed)
 - [x] **Phase 3 – Historical VaR/CVaR:** nominal EGP, USD and real EGP views, normal VaR comparison, Kupiec backtest (`egx_var`)
   - [ ] Load monthly CPI so the real-EGP view runs
 - [x] **Phase 4 – Monte Carlo:** two-factor Merton jump-diffusion (EGX30 + USD/EGP) fitted to history, devaluation scenarios, EGP and USD VaR checked against the exact distribution (`egx_mc`)
-- [ ] **Phase 5 – Hedging & stress:** hedge ratio, margin simulation, 2016 and 2022–24 shock replays
+- [x] **Phase 5 – Hedging & stress:** minimum-variance hedge ratio (`egx_hedge`), margin account with the ±10% price limit, margin-call Monte Carlo, shock grid and scenario replays (`egx_stress`)
+  - [ ] Load EGX30 and USD/EGP history from before 2023 to run the 2016 and 2022 replays
+  - [ ] Confirm EGX's maintenance margin (75% of initial is assumed)
 - [ ] **Phase 6 – Dashboard**
 
 ## Disclaimer

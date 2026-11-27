@@ -9,6 +9,9 @@ add_library(egxquant
     risk/var.cpp
     risk/jump_diffusion.cpp
     risk/calibration.cpp
+    risk/hedge.cpp
+    risk/margin.cpp
+    risk/stress.cpp
 )
 add_library(egxquant::egxquant ALIAS egxquant)
 

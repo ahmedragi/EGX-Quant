@@ -15,3 +15,9 @@ target_link_libraries(egx_var PRIVATE egxquant::data egxq_warnings)
 
 add_executable(egx_mc egx_mc/main.cpp)
 target_link_libraries(egx_mc PRIVATE egxquant::data egxq_warnings)
+
+add_executable(egx_hedge egx_hedge/main.cpp)
+target_link_libraries(egx_hedge PRIVATE egxquant::data egxq_warnings)
+
+add_executable(egx_stress egx_stress/main.cpp)
+target_link_libraries(egx_stress PRIVATE egxquant::data egxq_warnings)

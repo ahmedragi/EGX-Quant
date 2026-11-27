@@ -55,6 +55,11 @@ struct HorizonDraw {
 /// VaR depends only on the horizon return). Deterministic for a given seed.
 std::vector<HorizonDraw> simulate_horizon(const EgxFxModel& m, double years, std::size_t paths, std::uint64_t seed);
 
+/// Daily paths: result[path][day] holds that day's log returns. For margining
+/// and other path-dependent questions. Deterministic for a given seed.
+std::vector<std::vector<HorizonDraw>> simulate_daily_paths(const EgxFxModel& m, std::size_t days, std::size_t paths,
+                                                           std::uint64_t seed, double days_per_year = 250.0);
+
 /// One normal component of the exact distribution: given the jump counts, the
 /// horizon log return is normal.
 struct MixtureComponent {

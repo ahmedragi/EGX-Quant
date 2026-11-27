@@ -54,6 +54,14 @@ std::vector<IndexFxPoint> align_index_fx(const std::vector<IndexLevel>& egp, con
 /// The aligned EGX30 / USD-EGP series between two dates, from the database.
 std::vector<IndexFxPoint> index_fx_between(const MarketDb& db, const Date& from, const Date& to);
 
+/// Daily log returns of an aligned series; dates[i] is the day return i ends on.
+struct DailyLogReturns {
+    std::vector<Date> dates;
+    std::vector<double> index;
+    std::vector<double> fx;
+};
+DailyLogReturns daily_log_returns(const std::vector<IndexFxPoint>& points);
+
 /// The EGX30 series between two dates in one view, read from the database.
 ViewSeries index_view(const MarketDb& db, const Date& from, const Date& to, RiskView view);
 
